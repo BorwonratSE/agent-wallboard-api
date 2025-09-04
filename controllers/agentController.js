@@ -52,26 +52,34 @@ getAllAgents: (req, res) => {
   // 🔄 TODO #2: นักศึกษาทำเอง (15 นาที)  
   // POST /api/agents
   createAgent: (req, res) => {
-    try {
-      const agentData = req.body;
+  try {
+    const agentData = req.body;
 
-      // TODO: ตรวจสอบว่า agentCode ซ้ำไหม
-      // Hint: ใช้ Array.from(agents.values()).find()
-      
-      // TODO: สร้าง Agent ใหม่
-      // Hint: const newAgent = new Agent(agentData);
-      
-      // TODO: เก็บลง Map
-      // Hint: agents.set(newAgent.id, newAgent);
-      
-      // TODO: ส่ง response พร้อม status 201
-      
-      return sendError(res, 'TODO: Implement createAgent function', 501);
-    } catch (error) {
-      console.error('Error in createAgent:', error);
-      return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500);
+    // ตรวจสอบว่า agentCode ซ้ำไหม
+    const isDuplicate = Array.from(agents.values()).find(
+      (agent) => agent.agentCode === agentData.agentCode
+    );
+
+    if (isDuplicate) {
+      return sendError(res, API_MESSAGES.AGENT_CODE_DUPLICATE, 400);
     }
-  },
+
+    // สร้าง Agent ใหม่
+    const newAgent = new Agent(agentData);
+
+    // เก็บลง Map
+    agents.set(newAgent.id, newAgent);
+
+    console.log(`✅ Created new agent: ${newAgent.agentCode}`);
+
+    // ส่ง response พร้อม status 201
+    return sendSuccess(res, API_MESSAGES.AGENT_CREATED, newAgent.toJSON(), 201);
+  } catch (error) {
+    console.error('Error in createAgent:', error);
+    return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500);
+  }
+},
+
 
   // ✅ ให้ code สำเร็จเป็นตัวอย่าง
   // PUT /api/agents/:id
