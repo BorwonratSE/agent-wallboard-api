@@ -110,26 +110,45 @@ getAllAgents: (req, res) => {
     }
   },
 
-  // 🔄 TODO #3: นักศึกษาทำเอง (15 นาที - ยากสุด)
-  // PATCH /api/agents/:id/status  
-  updateAgentStatus: (req, res) => {
-    try {
-      const { id } = req.params;
-      const { status, reason } = req.body;
+ updateAgentStatus: (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, reason } = req.body;
 
-      // TODO: หา agent จาก id
-      // TODO: ตรวจสอบว่า agent มีอยู่ไหม
-      // TODO: validate status ด้วย AGENT_STATUS  
-      // TODO: ตรวจสอบ valid transition ด้วย VALID_STATUS_TRANSITIONS
-      // TODO: เรียก agent.updateStatus(status, reason)
-      // TODO: ส่ง response กลับ
+    // 1. หา agent จาก id
+    const agent = agents.get(id);
 
-      return sendError(res, 'TODO: Implement updateAgentStatus function', 501);
-    } catch (error) {
-      console.error('Error in updateAgentStatus:', error);
-      return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500);
+    // 2. ตรวจสอบว่า agent มีอยู่ไหม
+    if (!agent) {
+      return sendError(res, API_MESSAGES.AGENT_NOT_FOUND, 404);
     }
-  },
+
+    // 3. ตรวจสอบว่า status ที่ส่งมาอยู่ใน AGENT_STATUS หรือไม่
+    if (!Object.values(AGENT_STATUS).includes(status)) {
+      return sendError(res, API_MESSAGES.INVALID_AGENT_STATUS, 400);
+    }
+
+    // 4. ตรวจสอบว่า transition ถูกต้องไหม
+    const currentStatus = agent.status;
+    const allowedTransitions = VALID_STATUS_TRANSITIONS[currentStatus] || [];
+
+    if (!allowedTransitions.includes(status)) {
+      return sendError(res, API_MESSAGES.INVALID_STATUS_TRANSITION, 400);
+    }
+
+    // 5. อัปเดตสถานะใหม่
+    agent.updateStatus(status, reason);
+
+    console.log(`🔄 Updated status of agent ${agent.agentCode} to ${status}`);
+
+    // 6. ส่ง response กลับ
+    return sendSuccess(res, API_MESSAGES.AGENT_STATUS_UPDATED, agent.toJSON());
+  } catch (error) {
+    console.error('Error in updateAgentStatus:', error);
+    return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500);
+  }
+},
+
 
   // ✅ ให้ code สำเร็จ
   // DELETE /api/agents/:id
