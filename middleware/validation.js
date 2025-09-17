@@ -48,21 +48,35 @@ const schemas = {
       })
   }),
 
-statusUpdate: Joi.object({
-  status: Joi.string()
-    .valid(...Object.values(AGENT_STATUS))
-    .required()
-    .messages({
-      'any.only': `Status must be one of: ${Object.values(AGENT_STATUS).join(', ')}`,
-      'any.required': 'Status is required'
-    }),
-  reason: Joi.string()
-    .max(200)
-    .optional()
-    .messages({
-      'string.max': 'Reason cannot exceed 200 characters'
-        })
-    })
+// 🔄 TODO #4: นักศึกษาทำเอง (15 นาที)
+  statusUpdate: Joi.object({
+    // TODO: สร้าง validation สำหรับ status update
+    // Requirements:
+    // 1. status ต้องเป็น valid AGENT_STATUS
+    // 2. reason เป็น optional string ไม่เกิน 200 ตัวอักษร
+    // 3. ใส่ error messages ที่เหมาะสม
+
+    // Hint structure:
+    // status: Joi.string().valid(...).required().messages({...}),
+    // reason: Joi.string().max(200).optional().messages({...})
+
+    status: Joi.string()
+      .valid(...Object.values(AGENT_STATUS))
+      .required()
+      .messages({
+        'any.only': `Status must be one of: ${Object.values(AGENT_STATUS).join(', ')}`,
+        'any.required': 'Status is required'
+      }),
+
+    reason: Joi.string()
+      .max(200)
+      .optional()
+      .messages({
+        'string.max': 'Reason cannot exceed 200 characters'
+      })
+
+  })
+
 };
 
 // Validation middleware functions
