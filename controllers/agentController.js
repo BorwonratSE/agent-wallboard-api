@@ -24,30 +24,51 @@ const agentController = {
   },
 
 // Solution hints:
-getAllAgents: (req, res) => {
-  try {
-    const { status, department } = req.query;
-    let agentList = Array.from(agents.values());
 
-    // Filter by status
-    if (status) {
-      agentList = agentList.filter(agent => agent.status === status);
-    }
-    
-    // Filter by department  
-    if (department) {
-      agentList = agentList.filter(agent => agent.department === department);
-    }
+ // 🔄 TODO #1: นักศึกษาทำเอง (10 นาที)
+  // GET /api/agents
+  getAllAgents: (req, res) => {
+    try {
+      // TODO: ดึงข้อมูล agents ทั้งหมดจาก Map
+      // Hint: ใช้ Array.from(agents.values())
 
-    console.log(`📋 Retrieved ${agentList.length} agents`);
-    return sendSuccess(res, 'Agents retrieved successfully', 
-      agentList.map(agent => agent.toJSON())
-    );
-  } catch (error) {
-    console.error('Error in getAllAgents:', error);
-    return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500);
-  }
-},
+      // TODO: Filter ตาม query parameters
+      // Hint: req.query.status และ req.query.department
+
+      // TODO: ส่ง response ด้วย sendSuccess
+      // Hint: sendSuccess(res, message, data)
+
+
+      const { status, department } = req.query;
+      console.log('📖 Getting all agents with filters:', { status, department });
+
+      // 1. ดึงข้อมูล agents ทั้งหมดจาก Map
+      let agentList = Array.from(agents.values());
+
+      // 2. Apply filters ตาม query parameters
+      if (status) {
+        agentList = agentList.filter(agent => agent.status === status);
+      }
+
+      if (department) {
+        agentList = agentList.filter(agent => agent.department === department);
+      }
+
+      console.log(`📋 Retrieved ${agentList.length} agents`);
+
+      // 3. ส่ง response ด้วย sendSuccess
+      return sendSuccess(res, 'Agents retrieved successfully',
+        agentList.map(agent => agent.toJSON())
+      );
+
+      //return sendError(res, 'TODO: Implement getAllAgents function', 501);
+    } catch (error) {
+      console.error('Error in getAllAgents:', error);
+      return sendError(res, API_MESSAGES.INTERNAL_ERROR, 500);
+    }
+  },
+
+
 
   // 🔄 TODO #2: นักศึกษาทำเอง (15 นาที)  
   // POST /api/agents
