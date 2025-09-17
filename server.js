@@ -5,6 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 require('dotenv').config();
+const path = require('path');
 
 // Import configurations
 const databaseConnection = require('./config/database');
@@ -21,6 +22,12 @@ const AgentMongo = require('./models/AgentMongo'); // Phase 2 MongoDB model
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3001;
+
+
+// Route หลัก → ส่ง index.html
+app.get('/test-websocket.html', (req, res) => {
+    res.sendFile(path.join(__dirname,'test-websocket.html'));
+});
 
 // Initialize WebSocket
 const io = socketServer.initialize(server);
@@ -86,7 +93,7 @@ app.get('/', (req, res) => {
 app.use('/api', routes);
 
 // Error handlers (ต้องอยู่ท้ายสุด)
-app.use('*', notFoundHandler);
+app.use(notFoundHandler);
 app.use(globalErrorHandler);
 
 // Data migration function
