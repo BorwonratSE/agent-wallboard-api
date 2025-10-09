@@ -1,5 +1,6 @@
 const sql = require('mssql');
-const dbConfig = require('../config/database');
+const dbConfig = require('../../config/database');
+//const dbConfig = require('../../config/sqlserver');
 
 const userRepository = {
   findAll: async (filters = {}) => {
