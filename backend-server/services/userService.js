@@ -1,26 +1,16 @@
-// services/userService.js
 const userRepository = require('../repositories/userRepository');
 
 /**
- * User Service
- * Business logic layer สำหรับ user operations
- * ให้ 70% - นักศึกษาเพิ่ม business rules และ validations
+ * User Service - Business Logic Layer
+ * ให้ 70% - นักศึกษาเพิ่ม validation และ updateUser, deleteUser methods (30%)
  */
 const userService = {
   /**
    * Get all users with optional filtering
-   * @param {Object} filters - Filter criteria
-   * @returns {Promise<Array>} List of users
    */
-  getAllUsers: async (filters = {}) => {
+  async getAllUsers(filters = {}) {
     try {
       const users = await userRepository.findAll(filters);
-      
-      // TODO: นักศึกษาเพิ่ม business logic
-      // - Filter sensitive data (e.g., password hashes)
-      // - Add computed fields (e.g., fullName from firstName + lastName)
-      // - Sort by specific criteria
-      
       return users;
     } catch (error) {
       console.error('Error in getAllUsers service:', error);
@@ -30,10 +20,8 @@ const userService = {
 
   /**
    * Get user by ID
-   * @param {string} userId - User ID
-   * @returns {Promise<Object>} User object
    */
-  getUserById: async (userId) => {
+  async getUserById(userId) {
     try {
       const user = await userRepository.findById(userId);
       
@@ -41,9 +29,6 @@ const userService = {
         throw new Error('User not found');
       }
 
-      // Remove sensitive data
-      delete user.passwordHash;
-      
       return user;
     } catch (error) {
       console.error('Error in getUserById service:', error);
@@ -53,101 +38,134 @@ const userService = {
 
   /**
    * Create new user
-   * @param {Object} userData - User data
-   * @returns {Promise<Object>} Created user
    */
-  createUser: async (userData) => {
+  async createUser(userData) {
     try {
-      // TODO: นักศึกษาเพิ่ม validations
       // 1. Validate username format
-      const usernameRegex = /^(AG|SP|AD)\d{3}$/;
+      const usernameRegex = /^(AG|SP|AD)(00[1-9]|0[1-9]\d|[1-9]\d{2})$/;
       if (!usernameRegex.test(userData.username)) {
-        throw new Error('Invalid username format. Use AGxxx, SPxxx, or ADxxx');
+        throw new Error('Invalid username format. Use AGxxx, SPxxx, or ADxxx (001-999)');
       }
 
       // 2. Check if username already exists
-      // TODO: เรียก userRepository.findByUsername()
-      // TODO: ถ้าเจอ throw error 'Username already exists'
+      const exists = await userRepository.usernameExists(userData.username);
+      if (exists) {
+        throw new Error(`Username "${userData.username}" already exists`);
+      }
 
       // 3. Validate role-specific rules
-      // TODO: ถ้า role = 'Agent' หรือ 'Supervisor' ต้องมี teamId
-      // TODO: ถ้า role = 'Admin' ไม่ต้องมี teamId
+      if ((userData.role === 'Agent' || userData.role === 'Supervisor') && !userData.teamId) {
+        throw new Error('Team ID is required for Agent and Supervisor roles');
+      }
 
-      // 4. Set default values
-      const userToCreate = {
-        ...userData,
-        status: userData.status || 'Active',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-
-      // Create user
-      const newUser = await userRepository.create(userToCreate);
-      
-      // Remove sensitive data
-      delete newUser.passwordHash;
+      // 4. Create user
+      const newUser = await userRepository.create(userData);
       
       return newUser;
     } catch (error) {
       console.error('Error in createUser service:', error);
+      
+      // 🆕 Improved error handling
+      if (error.code === 'SQLITE_CONSTRAINT') {
+        if (error.message.includes('UNIQUE')) {
+          throw new Error(`Username "${userData.username}" already exists`);
+        }
+        if (error.message.includes('FOREIGN KEY')) {
+          throw new Error(`Team ID ${userData.teamId} does not exist`);
+        }
+      }
+      
       throw error;
     }
   },
 
   /**
    * Update existing user
-   * @param {string} userId - User ID
-   * @param {Object} userData - Updated data
-   * @returns {Promise<Object>} Updated user
+   * 
    */
-  updateUser: async (userId, userData) => {
-    // TODO: นักศึกษาเขียน implementation
-    // 1. ตรวจสอบว่า user มีอยู่จริง (เรียก getUserById)
-    // 2. ตรวจสอบว่าไม่มีการเปลี่ยน username
-    // 3. Validate updated data (role, teamId, status, etc.)
-    // 4. เรียก userRepository.update()
-    // 5. return updated user
-    throw new Error('Not implemented - TODO by student');
+  async updateUser(userId, userData) {
+    try {
+      // 1. ตรวจสอบว่า user มีอยู่จริง
+      const existingUser = await userRepository.findById(userId);
+      if (!existingUser) {
+        throw new Error('User not found');
+      }
+
+      // 2. ตรวจสอบว่าไม่มีการเปลี่ยน username
+      if (userData.username && userData.username !== existingUser.username) {
+        throw new Error('Username cannot be changed');
+      }
+
+      // 3. Validate role-specific rules (ถ้ามีการเปลี่ยน role หรือ teamId)
+      const newRole = userData.role || existingUser.role;
+      const newTeamId = userData.teamId !== undefined ? userData.teamId : existingUser.teamId;
+
+      if ((newRole === 'Agent' || newRole === 'Supervisor') && !newTeamId) {
+        throw new Error('Team ID is required for Agent and Supervisor roles');
+      }
+
+      // Optional: ถ้าอยากบังคับ Admin ไม่มี teamId
+      // if (newRole === 'Admin' && newTeamId) {
+      //   throw new Error('Admin role should not have a teamId');
+      // }
+
+      // 4. เรียก userRepository.update(userId, userData)
+      const updatedUser = await userRepository.update(userId, userData);
+
+      // 5. Return updated user
+      return updatedUser;
+
+    } catch (error) {
+      console.error('Error in updateUser service:', error);
+      throw error;
+    }
   },
 
   /**
    * Delete user (soft delete)
-   * @param {string} userId - User ID
-   * @returns {Promise<void>}
+   * 
    */
-  deleteUser: async (userId) => {
-    // TODO: นักศึกษาเขียน implementation
-    // 1. ตรวจสอบว่า user มีอยู่จริง
-    // 2. ตรวจสอบว่าไม่ใช่ current user (ไม่สามารถลบตัวเองได้)
-    // 3. Soft delete: set status = 'Inactive', deletedAt = current timestamp
-    // 4. เรียก userRepository.softDelete()
-    throw new Error('Not implemented - TODO by student');
+  async deleteUser(userId) {
+    try {
+      // 1. ตรวจสอบว่า user มีอยู่จริง
+      const user = await userRepository.findById(userId);
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      // 2. (Optional) ตรวจสอบว่าไม่ใช่ current user
+      // if (userId === currentUserId) {
+      //   throw new Error('You cannot delete yourself');
+      // }
+
+      // 3. Soft delete
+      await userRepository.softDelete(userId);
+
+      // 4. Return success message
+      return { success: true, message: 'User deleted successfully' };
+
+    } catch (error) {
+      console.error('Error in deleteUser service:', error);
+      throw error;
+    }
   },
 
   /**
    * Validate username format
-   * @param {string} username - Username to validate
-   * @returns {boolean} Is valid
    */
-  validateUsername: (username) => {
-    // TODO: นักศึกษาเขียน validation logic
-    // Format: AGxxx (Agent), SPxxx (Supervisor), ADxxx (Admin)
-    // xxx = 001-999
+  validateUsername(username) {
     const regex = /^(AG|SP|AD)(00[1-9]|0[1-9]\d|[1-9]\d{2})$/;
     return regex.test(username);
   },
 
   /**
-   * Check if user can be deleted
-   * @param {string} userId - User ID
-   * @returns {Promise<boolean>} Can delete
+   * Get role from username prefix
    */
-  canDeleteUser: async (userId) => {
-    // TODO: นักศึกษาเขียน business rules
-    // - ตรวจสอบว่า user มี active sessions หรือไม่
-    // - ตรวจสอบว่า user เป็น owner ของ data อื่นหรือไม่
-    // - Return true/false
-    return true;
+  getRoleFromUsername(username) {
+    if (username.startsWith('AG')) return 'Agent';
+    if (username.startsWith('SP')) return 'Supervisor';
+    if (username.startsWith('AD')) return 'Admin';
+    return null;
   }
 };
 
