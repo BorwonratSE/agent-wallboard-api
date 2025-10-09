@@ -12,7 +12,12 @@ const databaseConnection = require('../config/database');
 const socketServer = require('../websocket/socketServer');
 
 // Import routes
-const routes = require('../routes');
+const authRoutes = require('./routes/auth');
+const agentRoutes = require('./routes/agents');
+const messageRoutes = require('./routes/messages');
+const userRoutes = require('./routes/users'); // 🆕 เพิ่มบรรทัดนี้
+
+// Import error handlers and middleware
 const { globalErrorHandler, notFoundHandler, performanceMonitor } = require('../middleware/errorHandler');
 
 // Import models for migration
@@ -23,10 +28,9 @@ const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3001;
 
-
 // Route หลัก → ส่ง index.html
 app.get('/test-websocket.html', (req, res) => {
-    res.sendFile(path.join(__dirname,'test-websocket.html'));
+  res.sendFile(path.join(__dirname,'test-websocket.html'));
 });
 
 // Initialize WebSocket
@@ -79,6 +83,7 @@ app.get('/', (req, res) => {
     endpoints: {
       agents: '/api/agents',
       messages: '/api/messages',
+      users: '/api/users', // 🆕 เพิ่มใน endpoint list
       health: '/api/health',
       docs: '/api/docs'
     },
@@ -90,7 +95,10 @@ app.get('/', (req, res) => {
 });
 
 // API routes
-app.use('/api', routes);
+app.use('/api/auth', authRoutes);
+app.use('/api/agents', agentRoutes);
+app.use('/api/messages', messageRoutes);
+app.use('/api/users', userRoutes); // 🆕 เพิ่มบรรทัดนี้
 
 // Error handlers (ต้องอยู่ท้ายสุด)
 app.use(notFoundHandler);
@@ -135,6 +143,7 @@ const startServer = async () => {
       console.log('📚 API Endpoints:');
       console.log(`   👤 Agents: http://localhost:${PORT}/api/agents`);
       console.log(`   💬 Messages: http://localhost:${PORT}/api/messages`);
+      console.log(`   👥 Users: http://localhost:${PORT}/api/users`); // 🆕
       console.log(`   🏥 Health: http://localhost:${PORT}/api/health`);
       console.log(`   📖 Docs: http://localhost:${PORT}/api/docs`);
       console.log('🔥 New Features:');
@@ -155,15 +164,12 @@ const startServer = async () => {
 process.on('SIGTERM', async () => {
   console.log('🛑 SIGTERM received, shutting down gracefully');
   
-  // Close WebSocket connections
   if (io) {
     io.close();
   }
   
-  // Close database connection
   await databaseConnection.disconnect();
   
-  // Close HTTP server
   server.close(() => {
     console.log('✅ Process terminated gracefully');
     process.exit(0);
@@ -173,15 +179,12 @@ process.on('SIGTERM', async () => {
 process.on('SIGINT', async () => {
   console.log('🛑 SIGINT received, shutting down gracefully');
   
-  // Close WebSocket connections
   if (io) {
     io.close();
   }
   
-  // Close database connection
   await databaseConnection.disconnect();
   
-  // Close HTTP server
   server.close(() => {
     console.log('✅ Process terminated gracefully');
     process.exit(0);
