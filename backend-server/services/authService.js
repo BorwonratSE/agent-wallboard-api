@@ -7,12 +7,11 @@ const JWT_EXPIRES_IN = '24h';
 
 /**
  * Authentication Service
- * Handle login without password
- * ให้ 80% - นักศึกษาเพิ่ม JWT token generation
+ * เพิ่ม loginWithoutPassword method
  */
 const authService = {
   /**
-   * Login without password (using username only)
+   * 🆕 Login without password (using username only)
    * @param {string} username - User username/code
    * @returns {Promise<Object>} Auth result with token
    */
@@ -20,7 +19,7 @@ const authService = {
     try {
       // 1. Find user by username
       const user = await userRepository.findByUsername(username);
-      
+
       if (!user) {
         throw new Error('Invalid username');
       }
@@ -31,8 +30,6 @@ const authService = {
       }
 
       // 3. Generate JWT token
-      // TODO: นักศึกษาเพิ่ม JWT token generation
-      // Payload should include: userId, username, role
       const token = jwt.sign(
         {
           userId: user.id,
@@ -46,6 +43,13 @@ const authService = {
       // 4. Update last login timestamp
       await userRepository.updateLastLogin(user.id);
 
+      // Get team name (if any)
+      let teamName = null;
+      if (user.teamId) {
+        const team = await userRepository.findTeamById(user.teamId);
+        teamName = team?.teamName || null;
+      }
+
       // 5. Return user data และ token
       return {
         success: true,
@@ -54,7 +58,8 @@ const authService = {
           username: user.username,
           fullName: user.fullName,
           role: user.role,
-          teamId: user.teamId
+          teamId: user.teamId,
+          teamName: teamName
         },
         token: token,
         expiresIn: JWT_EXPIRES_IN
@@ -67,8 +72,6 @@ const authService = {
 
   /**
    * Verify JWT token
-   * @param {string} token - JWT token
-   * @returns {Object} Decoded token payload
    */
   verifyToken: (token) => {
     try {
@@ -77,30 +80,6 @@ const authService = {
     } catch (error) {
       throw new Error('Invalid or expired token');
     }
-  },
-
-  /**
-   * Validate user code format
-   * @param {string} username - Username/code
-   * @returns {boolean} Is valid format
-   */
-  validateUserCode: (username) => {
-    // TODO: นักศึกษาเขียน validation
-    // Format: AGxxx, SPxxx, ADxxx (xxx = 001-999)
-    const regex = /^(AG|SP|AD)(00[1-9]|0[1-9]\d|[1-9]\d{2})$/;
-    return regex.test(username);
-  },
-
-  /**
-   * Get user role from username prefix
-   * @param {string} username - Username/code
-   * @returns {string} Role name
-   */
-  getRoleFromUsername: (username) => {
-    if (username.startsWith('AG')) return 'Agent';
-    if (username.startsWith('SP')) return 'Supervisor';
-    if (username.startsWith('AD')) return 'Admin';
-    return null;
   }
 };
 

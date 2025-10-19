@@ -1,11 +1,10 @@
 // controllers/userController.js
-const userService = require('../../src/api/services/userService');
-const { validationResult } = require('express-validator');
+const userService = require('../services/userService');
 
 /**
  * User Controller
  * จัดการ HTTP requests สำหรับ user management
- * ให้ 80% - นักศึกษาเพิ่ม error handling และ response formatting
+ * ให้ 80% - นักศึกษาเพิ่ม updateUser และ deleteUser (20%)
  */
 const userController = {
   /**
@@ -14,7 +13,6 @@ const userController = {
    */
   getAllUsers: async (req, res) => {
     try {
-      // Get query parameters for filtering
       const { role, status, teamId } = req.query;
       
       const users = await userService.getAllUsers({
@@ -47,13 +45,6 @@ const userController = {
       const { id } = req.params;
       
       const user = await userService.getUserById(id);
-      
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: 'User not found'
-        });
-      }
 
       res.status(200).json({
         success: true,
@@ -61,10 +52,10 @@ const userController = {
       });
     } catch (error) {
       console.error('Error in getUserById:', error);
-      res.status(500).json({
+      const statusCode = error.message === 'User not found' ? 404 : 500;
+      res.status(statusCode).json({
         success: false,
-        message: 'Failed to fetch user',
-        error: error.message
+        message: error.message
       });
     }
   },
@@ -75,23 +66,8 @@ const userController = {
    */
   createUser: async (req, res) => {
     try {
-      // Check validation errors
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation failed',
-          errors: errors.array()
-        });
-      }
-
       const userData = req.body;
       
-      // TODO: นักศึกษาเพิ่ม validation เพิ่มเติม
-      // - Check username format (AGxxx, SPxxx, ADxxx)
-      // - Check if username already exists
-      // - Validate role-specific rules
-
       const newUser = await userService.createUser(userData);
 
       res.status(201).json({
@@ -102,15 +78,19 @@ const userController = {
     } catch (error) {
       console.error('Error in createUser:', error);
       
-      // TODO: นักศึกษาปรับปรุง error handling
-      // - Handle duplicate username error
-      // - Handle validation errors
-      // - Return appropriate status codes
+      // 🆕 Improved error status codes
+      let statusCode = 500;
+      if (error.message.includes('already exists')) {
+        statusCode = 409; // Conflict
+      } else if (error.message.includes('Invalid') || error.message.includes('required')) {
+        statusCode = 400; // Bad Request
+      } else if (error.message.includes('does not exist')) {
+        statusCode = 404; // Not Found
+      }
       
-      res.status(500).json({
+      res.status(statusCode).json({
         success: false,
-        message: 'Failed to create user',
-        error: error.message
+        message: error.message
       });
     }
   },
@@ -118,24 +98,44 @@ const userController = {
   /**
    * PUT /api/users/:id
    * Update existing user
+   * TODO: นักศึกษาเขียน implementation (10%)
+   * 
+   * 📝 INSTRUCTIONS:
+   * 1. ดึง id จาก req.params
+   * 2. ดึง updated data จาก req.body
+   * 3. เรียก userService.updateUser(id, userData)
+   * 4. Return response:
+   *    - Success: status 200 + updated user data
+   *    - Error: status 400/404/500 + error message
+   * 
+   * 💡 HINT: ดูตัวอย่างจาก createUser ด้านบน
    */
-  updateUser: async (req, res) => {
-    // TODO: นักศึกษาเขียน implementation
-    // Hint: ดึง id จาก req.params
-    // Hint: ดึง updated data จาก req.body
-    // Hint: ตรวจสอบว่า user มีอยู่จริง
-    // Hint: เรียก userService.updateUser()
-    // Hint: return updated user
+ updateUser: async (req, res) => {
     try {
-      res.status(501).json({
-        success: false,
-        message: 'Not implemented - TODO by student'
+      const { id } = req.params;
+      const userData = req.body;
+
+      // เรียก service เพื่ออัพเดต user
+      const updatedUser = await userService.updateUser(id, userData);
+
+      res.status(200).json({
+        success: true,
+        message: 'User updated successfully',
+        data: updatedUser
       });
     } catch (error) {
-      res.status(500).json({
+      console.error('Error in updateUser:', error);
+
+      let statusCode = 500;
+      if (error.message === 'User not found') {
+        statusCode = 404;
+      } else if (error.message.includes('cannot be changed') || error.message.includes('Invalid')) {
+        statusCode = 400;
+      }
+
+      res.status(statusCode).json({
         success: false,
-        message: 'Failed to update user',
-        error: error.message
+        message: error.message
       });
     }
   },
@@ -143,46 +143,38 @@ const userController = {
   /**
    * DELETE /api/users/:id
    * Delete user (soft delete)
+   * TODO: นักศึกษาเขียน implementation (10%)
+   * 
+   * 📝 INSTRUCTIONS:
+   * 1. ดึง id จาก req.params
+   * 2. เรียก userService.deleteUser(id)
+   * 3. Return response:
+   *    - Success: status 200 + success message
+   *    - Error: status 404/500 + error message
    */
-  deleteUser: async (req, res) => {
-    // TODO: นักศึกษาเขียน implementation
-    // Hint: ดึง id จาก req.params
-    // Hint: ตรวจสอบว่า user มีอยู่จริง
-    // Hint: เรียก userService.deleteUser() (จะทำ soft delete)
-    // Hint: return success message
+ deleteUser: async (req, res) => {
     try {
-      res.status(501).json({
-        success: false,
-        message: 'Not implemented - TODO by student'
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: 'Failed to delete user',
-        error: error.message
-      });
-    }
-  },
+      const { id } = req.params;
 
-  /**
-   * PATCH /api/users/:id/toggle-status
-   * Toggle user status (active/inactive)
-   */
-  toggleUserStatus: async (req, res) => {
-    // TODO: นักศึกษาเขียน implementation (optional feature)
-    try {
-      res.status(501).json({
-        success: false,
-        message: 'Not implemented - TODO by student'
+      // เรียก service เพื่อลบ user (soft delete)
+      await userService.deleteUser(id);
+
+      res.status(200).json({
+        success: true,
+        message: 'User deleted successfully'
       });
     } catch (error) {
-      res.status(500).json({
+      console.error('Error in deleteUser:', error);
+
+      const statusCode = error.message === 'User not found' ? 404 : 500;
+
+      res.status(statusCode).json({
         success: false,
-        message: 'Failed to toggle user status',
-        error: error.message
+        message: error.message
       });
     }
   }
 };
+
 
 module.exports = userController;

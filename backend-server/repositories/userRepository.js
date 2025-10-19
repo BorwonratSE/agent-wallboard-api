@@ -1,11 +1,32 @@
-const sql = require('mssql');
-const dbConfig = require('../../config/database');
-//const dbConfig = require('../../config/sqlserver');
+// repositories/userRepository.js
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
 
-const userRepository = {
-  findAll: async (filters = {}) => {
-    try {
-      const pool = await sql.connect(dbConfig);
+// Database path (ใช้ database เดิม)
+const dbPath = path.join(__dirname, '../../database/sqlite/wallboard.db');
+
+/**
+ * User Repository - Data Access Layer
+ * ให้ 85% - นักศึกษาเพิ่ม update() method (15%)
+ */
+class UserRepository {
+  constructor() {
+    this.db = new sqlite3.Database(dbPath, (err) => {
+      if (err) {
+        console.error('Error connecting to database:', err);
+      } else {
+        console.log('✅ UserRepository connected to SQLite database');
+        // 🆕 เปิดใช้งาน Foreign Key constraints
+        this.db.run('PRAGMA foreign_keys = ON');
+      }
+    });
+  }
+
+  /**
+   * Find all users with optional filters
+   */
+  async findAll(filters = {}) {
+    return new Promise((resolve, reject) => {
       let query = `
         SELECT 
           u.id,
@@ -13,257 +34,295 @@ const userRepository = {
           u.fullName,
           u.role,
           u.teamId,
-          t.teamName,
+          t.team_name as teamName,
           u.status,
           u.createdAt,
           u.updatedAt,
           u.lastLoginAt
-        FROM Users u
-        LEFT JOIN Teams t ON u.teamId = t.id
+        FROM users u
+        LEFT JOIN Teams t ON u.teamId = t.team_id
         WHERE u.deletedAt IS NULL
       `;
 
       const params = [];
 
+      // Add filters
       if (filters.role) {
-        query += ' AND u.role = @role';
-        params.push({ name: 'role', type: sql.NVarChar, value: filters.role });
+        query += ' AND u.role = ?';
+        params.push(filters.role);
       }
 
       if (filters.status) {
-        query += ' AND u.status = @status';
-        params.push({ name: 'status', type: sql.NVarChar, value: filters.status });
+        query += ' AND u.status = ?';
+        params.push(filters.status);
       }
 
       if (filters.teamId) {
-        query += ' AND u.teamId = @teamId';
-        params.push({ name: 'teamId', type: sql.Int, value: parseInt(filters.teamId) });
+        query += ' AND u.teamId = ?';
+        params.push(filters.teamId);
       }
 
       query += ' ORDER BY u.createdAt DESC';
 
-      const request = pool.request();
-      params.forEach(param => {
-        request.input(param.name, param.type, param.value);
+      this.db.all(query, params, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
       });
+    });
+  }
 
-      const result = await request.query(query);
-      return result.recordset;
-    } catch (error) {
-      console.error('Error in findAll:', error);
-      throw error;
-    }
-  },
-
-  findById: async (userId) => {
-    try {
-      const pool = await sql.connect(dbConfig);
-
-      const result = await pool.request()
-        .input('userId', sql.Int, userId)
-        .query(`
-          SELECT 
-            u.id,
-            u.username,
-            u.fullName,
-            u.role,
-            u.teamId,
-            t.teamName,
-            u.status,
-            u.createdAt,
-            u.updatedAt,
-            u.lastLoginAt
-          FROM Users u
-          LEFT JOIN Teams t ON u.teamId = t.id
-          WHERE u.id = @userId AND u.deletedAt IS NULL
-        `);
-
-      return result.recordset[0];
-    } catch (error) {
-      console.error('Error in findById:', error);
-      throw error;
-    }
-  },
-
-  findByUsername: async (username) => {
-    try {
-      const pool = await sql.connect(dbConfig);
-
-      const result = await pool.request()
-        .input('username', sql.NVarChar, username)
-        .query(`
-          SELECT 
-            u.id,
-            u.username,
-            u.fullName,
-            u.role,
-            u.teamId,
-            t.teamName,
-            u.status,
-            u.createdAt,
-            u.updatedAt,
-            u.lastLoginAt
-          FROM Users u
-          LEFT JOIN Teams t ON u.teamId = t.id
-          WHERE u.username = @username AND u.deletedAt IS NULL
-        `);
-
-      return result.recordset[0];
-    } catch (error) {
-      console.error('Error in findByUsername:', error);
-      throw error;
-    }
-  },
-
-  create: async (userData) => {
-    try {
-      const pool = await sql.connect(dbConfig);
-
-      const result = await pool.request()
-        .input('username', sql.NVarChar, userData.username)
-        .input('fullName', sql.NVarChar, userData.fullName)
-        .input('role', sql.NVarChar, userData.role)
-        .input('teamId', sql.Int, userData.teamId || null)
-        .input('status', sql.NVarChar, userData.status || 'Active')
-        .query(`
-          INSERT INTO Users (username, fullName, role, teamId, status, createdAt, updatedAt)
-          VALUES (@username, @fullName, @role, @teamId, @status, GETDATE(), GETDATE());
-
-          SELECT 
-            u.id,
-            u.username,
-            u.fullName,
-            u.role,
-            u.teamId,
-            t.teamName,
-            u.status,
-            u.createdAt,
-            u.updatedAt
-          FROM Users u
-          LEFT JOIN Teams t ON u.teamId = t.id
-          WHERE u.id = SCOPE_IDENTITY();
-        `);
-
-      return result.recordset[0];
-    } catch (error) {
-      console.error('Error in create:', error);
-      throw error;
-    }
-  },
-
-  update: async (userId, userData) => {
-    try {
-      const pool = await sql.connect(dbConfig);
-
-      let setClause = 'updatedAt = GETDATE()';
-      const request = pool.request().input('userId', sql.Int, userId);
-
-      if (userData.fullName !== undefined) {
-        setClause += ', fullName = @fullName';
-        request.input('fullName', sql.NVarChar, userData.fullName);
-      }
-
-      if (userData.role !== undefined) {
-        setClause += ', role = @role';
-        request.input('role', sql.NVarChar, userData.role);
-      }
-
-      if (userData.teamId !== undefined) {
-        setClause += ', teamId = @teamId';
-        request.input('teamId', sql.Int, userData.teamId);
-      }
-
-      if (userData.status !== undefined) {
-        setClause += ', status = @status';
-        request.input('status', sql.NVarChar, userData.status);
-      }
-
-      const updateQuery = `
-        UPDATE Users 
-        SET ${setClause}
-        WHERE id = @userId AND deletedAt IS NULL;
-
+  /**
+   * Find user by ID
+   */
+  async findById(userId) {
+    return new Promise((resolve, reject) => {
+      const query = `
         SELECT 
           u.id,
           u.username,
           u.fullName,
           u.role,
           u.teamId,
-          t.teamName,
+          t.team_name as teamName,
           u.status,
           u.createdAt,
-          u.updatedAt
-        FROM Users u
-        LEFT JOIN Teams t ON u.teamId = t.id
-        WHERE u.id = @userId;
+          u.updatedAt,
+          u.lastLoginAt
+        FROM users u
+        LEFT JOIN Teams t ON u.teamId = t.team_id
+        WHERE u.id = ? AND u.deletedAt IS NULL
       `;
 
-      const result = await request.query(updateQuery);
-      return result.recordset[0];
-    } catch (error) {
-      console.error('Error in update:', error);
-      throw error;
-    }
-  },
-
-  softDelete: async (userId) => {
-    try {
-      const pool = await sql.connect(dbConfig);
-
-      await pool.request()
-        .input('userId', sql.Int, userId)
-        .query(`
-          UPDATE Users 
-          SET status = 'Inactive', 
-              deletedAt = GETDATE(),
-              updatedAt = GETDATE()
-          WHERE id = @userId
-        `);
-
-      return true;
-    } catch (error) {
-      console.error('Error in softDelete:', error);
-      throw error;
-    }
-  },
-
-  updateLastLogin: async (userId) => {
-    try {
-      const pool = await sql.connect(dbConfig);
-
-      await pool.request()
-        .input('userId', sql.Int, userId)
-        .query(`
-          UPDATE Users 
-          SET lastLoginAt = GETDATE()
-          WHERE id = @userId
-        `);
-
-      return true;
-    } catch (error) {
-      console.error('Error in updateLastLogin:', error);
-      throw error;
-    }
-  },
-
-  usernameExists: async (username) => {
-    try {
-      const pool = await sql.connect(dbConfig);
-
-      const result = await pool.request()
-        .input('username', sql.NVarChar, username)
-        .query(`
-          SELECT COUNT(*) as count 
-          FROM Users 
-          WHERE username = @username AND deletedAt IS NULL
-        `);
-
-      return result.recordset[0].count > 0;
-    } catch (error) {
-      console.error('Error in usernameExists:', error);
-      throw error;
-    }
+      this.db.get(query, [userId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
   }
-};
 
-module.exports = userRepository;
+  /**
+ * Find team by ID
+ * @param {number} teamId 
+ * @returns {Promise<Object|null>} { teamName } หรือ null
+ */
+  async findTeamById(teamId) {
+    return new Promise((resolve, reject) => {
+      if (!teamId) return resolve(null);
+
+      const query = `
+      SELECT team_name as teamName
+      FROM Teams
+      WHERE team_id = ?
+    `;
+
+      this.db.get(query, [teamId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row || null);
+      });
+    });
+  }
+
+  /**
+   * Find user by username
+   */
+  async findByUsername(username) {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT 
+          u.id,
+          u.username,
+          u.fullName,
+          u.role,
+          u.teamId,
+          t.team_name as teamName,
+          u.status,
+          u.createdAt,
+          u.updatedAt,
+          u.lastLoginAt
+        FROM users u
+        LEFT JOIN Teams t ON u.teamId = t.team_id
+        WHERE u.username = ? AND u.deletedAt IS NULL
+      `;
+
+      this.db.get(query, [username], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+  }
+
+  /**
+   * Create new user
+   */
+  async create(userData) {
+    return new Promise((resolve, reject) => {
+      const query = `
+        INSERT INTO users (username, fullName, role, teamId, status)
+        VALUES (?, ?, ?, ?, ?)
+      `;
+
+      const params = [
+        userData.username,
+        userData.fullName,
+        userData.role,
+        userData.teamId || null,
+        userData.status || 'Active'
+      ];
+
+      this.db.run(query, params, function (err) {
+        if (err) {
+          reject(err);
+        } else {
+          // Return the created user
+          const newUserId = this.lastID;
+          resolve({ id: newUserId, ...userData });
+        }
+      });
+    });
+  }
+
+  /**
+   * Update user
+   * TODO: นักศึกษาเขียน implementation (15%)
+   * 
+   * 📝 INSTRUCTIONS:
+   * เป้าหมาย: สร้าง dynamic UPDATE query ที่สามารถอัพเดตเฉพาะ fields ที่ส่งมา
+   * 
+   * ขั้นตอนการทำ:
+   * 1. สร้างตัวแปร setClause เริ่มต้นด้วย 'updatedAt = CURRENT_TIMESTAMP'
+   * 2. สร้าง array params สำหรับเก็บค่าที่จะ bind
+   * 3. ตรวจสอบแต่ละ field ใน userData:
+   *    - ถ้า userData.fullName !== undefined:
+   *        setClause += ', fullName = ?'
+   *        params.push(userData.fullName)
+   *    - ทำเหมือนกันกับ role, teamId, status
+   * 4. เพิ่ม userId เป็น parameter สุดท้าย: params.push(userId)
+   * 5. สร้าง query: UPDATE users SET ${setClause} WHERE id = ? AND deletedAt IS NULL
+   * 6. รัน this.db.run(query, params, callback)
+   * 7. ใน callback:
+   *    - ถ้า err: reject(err)
+   *    - ถ้า this.changes === 0: reject(new Error('User not found'))
+   *    - ถ้าสำเร็จ: resolve({ id: userId, ...userData })
+   * 
+   * 💡 HINTS:
+   * - ใช้ undefined แทน null เพื่อตรวจสอบว่า field ถูกส่งมาหรือไม่
+   * - this.changes จะบอกจำนวน rows ที่ถูกอัพเดต
+   * - ต้องมี AND deletedAt IS NULL เพื่อไม่ให้อัพเดต deleted users
+   */
+  async update(userId, userData) {
+    return new Promise((resolve, reject) => {
+      // Step 1: สร้าง setClause เริ่มต้น
+      let setClause = 'updatedAt = CURRENT_TIMESTAMP';
+      const params = [];
+
+      // Step 2-3: เพิ่ม fields ที่มีค่า
+      if (userData.fullName !== undefined) {
+        setClause += ', fullName = ?';
+        params.push(userData.fullName);
+      }
+
+      if (userData.role !== undefined) {
+        setClause += ', role = ?';
+        params.push(userData.role);
+      }
+
+      if (userData.teamId !== undefined) {
+        setClause += ', teamId = ?';
+        params.push(userData.teamId);
+      }
+
+      if (userData.status !== undefined) {
+        setClause += ', status = ?';
+        params.push(userData.status);
+      }
+
+      // Step 4: เพิ่ม userId เป็น parameter สุดท้าย
+      params.push(userId);
+
+      // Step 5: สร้าง query
+      const query = `
+      UPDATE users 
+      SET ${setClause}
+      WHERE id = ? AND deletedAt IS NULL
+    `;
+
+      // Step 6-7: รัน query
+      this.db.run(query, params, function (err) {
+        if (err) {
+          reject(err);
+        } else if (this.changes === 0) {
+          reject(new Error('User not found or already deleted'));
+        } else {
+          resolve({ id: userId, ...userData });
+        }
+      });
+    });
+  }
+
+
+  /**
+   * Soft delete user
+   */
+  async softDelete(userId) {
+    return new Promise((resolve, reject) => {
+      const query = `
+        UPDATE users 
+        SET status = 'Inactive', 
+            deletedAt = CURRENT_TIMESTAMP,
+            updatedAt = CURRENT_TIMESTAMP
+        WHERE id = ? AND deletedAt IS NULL
+      `;
+
+      this.db.run(query, [userId], function (err) {
+        if (err) {
+          reject(err);
+        } else if (this.changes === 0) {
+          reject(new Error('User not found or already deleted'));
+        } else {
+          resolve({ success: true, changes: this.changes });
+        }
+      });
+    });
+  }
+
+  /**
+   * Update last login timestamp
+   */
+  async updateLastLogin(userId) {
+    return new Promise((resolve, reject) => {
+      const query = `
+        UPDATE users 
+        SET lastLoginAt = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `;
+
+      this.db.run(query, [userId], function (err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve({ success: true });
+        }
+      });
+    });
+  }
+
+  /**
+   * Check if username exists
+   */
+  async usernameExists(username) {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT COUNT(*) as count 
+        FROM users 
+        WHERE username = ? AND deletedAt IS NULL
+      `;
+
+      this.db.get(query, [username], (err, row) => {
+        if (err) reject(err);
+        else resolve(row.count > 0);
+      });
+    });
+  }
+}
+
+module.exports = new UserRepository();
